@@ -24,6 +24,18 @@ from .binary import (
     random_start_binary,
 )
 from .classes import BootML, MultiMethodMLEstimate
+from .continuous import (
+    estimate_ML_continuous,
+    generate_multimethod_continuous,
+    plot_ML_continuous,
+    pollinate_ML_continuous,
+)
+from .ordinal import (
+    estimate_ML_ordinal,
+    generate_multimethod_ordinal,
+    plot_ML_ordinal,
+    pollinate_ML_ordinal,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -45,8 +57,7 @@ def _check_type(type_: str) -> str:
 
 def _not_implemented(type_: str, fn: str):
     raise NotImplementedError(
-        f"'{fn}' is not yet implemented for type='{type_}'.  "
-        "Only 'binary' is currently supported."
+        f"'{fn}' is not yet implemented for type='{type_}'."
     )
 
 
@@ -98,13 +109,18 @@ def generate_multimethod_data(
     t = _check_type(type)
     if t == _BINARY:
         return generate_multimethod_binary(
-            n_method=n_method,
-            n_obs=n_obs,
-            prev=prev,
-            D=D,
-            method_names=method_names,
-            obs_names=obs_names,
-            **kwargs,
+            n_method=n_method, n_obs=n_obs, prev=prev, D=D,
+            method_names=method_names, obs_names=obs_names, **kwargs,
+        )
+    if t == _ORDINAL:
+        return generate_multimethod_ordinal(
+            n_method=n_method, n_obs=n_obs, prev=prev, D=D,
+            method_names=method_names, obs_names=obs_names, **kwargs,
+        )
+    if t == _CONTINUOUS:
+        return generate_multimethod_continuous(
+            n_method=n_method, n_obs=n_obs, prev=prev, D=D,
+            method_names=method_names, obs_names=obs_names, **kwargs,
         )
     _not_implemented(t, "generate_multimethod_data")
 
@@ -159,13 +175,18 @@ def estimate_ML(
     t = _check_type(type)
     if t == _BINARY:
         return estimate_ML_binary(
-            data=data,
-            freqs=freqs,
-            init=init,
-            max_iter=max_iter,
-            tol=tol,
-            save_progress=save_progress,
-            **kwargs,
+            data=data, freqs=freqs, init=init,
+            max_iter=max_iter, tol=tol, save_progress=save_progress, **kwargs,
+        )
+    if t == _ORDINAL:
+        return estimate_ML_ordinal(
+            data=data, freqs=freqs, init=init,
+            max_iter=max_iter, tol=tol, save_progress=save_progress, **kwargs,
+        )
+    if t == _CONTINUOUS:
+        return estimate_ML_continuous(
+            data=data, freqs=freqs, init=init,
+            max_iter=max_iter, tol=tol, save_progress=save_progress, **kwargs,
         )
     _not_implemented(t, "estimate_ML")
 
@@ -216,6 +237,10 @@ def pollinate_ML(
 
     if t == _BINARY:
         return pollinate_ML_binary(data=data, freqs=freqs, **kwargs)
+    if t == _ORDINAL:
+        return pollinate_ML_ordinal(data=data, freqs=freqs, **kwargs)
+    if t == _CONTINUOUS:
+        return pollinate_ML_continuous(data=data, freqs=freqs, **kwargs)
     _not_implemented(t, "pollinate_ML")
 
 
@@ -252,7 +277,7 @@ def random_start(
     t = _check_type(type)
     if t == _BINARY:
         return random_start_binary(n_method=n_method, method_names=method_names)
-    _not_implemented(t, "random_start")
+    _not_implemented(t, "random_start")  # ordinal/continuous not yet supported
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +310,10 @@ def plot_ML(
     t = _check_type(ML_est.type)
     if t == _BINARY:
         return plot_ML_binary(ML_est, params=params)
+    if t == _ORDINAL:
+        return plot_ML_ordinal(ML_est, params=params)
+    if t == _CONTINUOUS:
+        return plot_ML_continuous(ML_est, params=params)
     _not_implemented(t, "plot_ML")
 
 

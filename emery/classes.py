@@ -50,21 +50,26 @@ class MultiMethodMLEstimate:
     # ------------------------------------------------------------------
 
     def __repr__(self) -> str:
-        # Mirror the R show() method: hide qk / zk posterior arrays
+        # Mirror the R show() method: hide per-observation posterior arrays
+        # (qk_est, q_k1_est, z_k1_est, z_k0_est, …)
+        import re
         display = {
             k: v for k, v in self.results.items()
-            if not k.startswith(("qk", "zk"))
+            if not re.search(r"q_?k|z_?k", k)
         }
         lines = [
             f"MultiMethodMLEstimate(type='{self.type}', iter={self.iter})"
         ]
         for k, v in display.items():
-            v = np.atleast_1d(v)
-            if v.size == 1:
-                lines.append(f"  {k}: {float(v[0]):.6f}")
+            arr = np.asarray(v, dtype=float)
+            if arr.ndim > 1:
+                lines.append(f"  {k}: {arr.shape} matrix")
+            elif arr.size == 1:
+                lines.append(f"  {k}: {float(arr.flat[0]):.6f}")
             else:
-                vals = ", ".join(f"{float(x):.6f}" for x in v)
-                lines.append(f"  {k}: [{vals}]")
+                vals = ", ".join(f"{float(x):.6f}" for x in arr.flat[:8])
+                suffix = ", ..." if arr.size > 8 else ""
+                lines.append(f"  {k}: [{vals}{suffix}]")
         return "\n".join(lines)
 
     # ------------------------------------------------------------------

@@ -30,6 +30,12 @@ from .binary import (
     random_start_binary,
 )
 from .classes import BootML, MultiMethodMLEstimate
+from .continuous import (
+    estimate_ML_continuous,
+    generate_multimethod_continuous,
+    plot_ML_continuous,
+    pollinate_ML_continuous,
+)
 from .core import (
     aggregate_boot_ML,
     boot_ML,
@@ -39,6 +45,12 @@ from .core import (
     plot_boot_ML,
     pollinate_ML,
     random_start,
+)
+from .ordinal import (
+    estimate_ML_ordinal,
+    generate_multimethod_ordinal,
+    plot_ML_ordinal,
+    pollinate_ML_ordinal,
 )
 from .utils import (
     censor_data,
@@ -69,6 +81,16 @@ __all__ = [
     "random_start_binary",
     "plot_ML_binary",
     "bin_auc",
+    # Ordinal-specific
+    "generate_multimethod_ordinal",
+    "estimate_ML_ordinal",
+    "pollinate_ML_ordinal",
+    "plot_ML_ordinal",
+    # Continuous-specific
+    "generate_multimethod_continuous",
+    "estimate_ML_continuous",
+    "pollinate_ML_continuous",
+    "plot_ML_continuous",
     # Utilities
     "name_thing",
     "define_disease_state",

@@ -2,13 +2,21 @@
 
 A Python port of the R package [`emery`](https://github.com/cdkuempel/emery) (Corie Drake).
 
-Produces maximum likelihood estimates of accuracy statistics — sensitivity, specificity, and prevalence — for multiple binary measurement methods when **no gold standard is available** (the *imperfect gold standard* problem).  Estimation is performed via an expectation-maximization (EM) algorithm based on:
+Produces maximum likelihood estimates of accuracy statistics — sensitivity, specificity, AUC, and prevalence — for multiple measurement methods when **no gold standard is available** (the *imperfect gold standard* problem).  Estimation uses an expectation-maximization (EM) algorithm based on:
 
 > Zhou, Obuchowski & McClish (2011). *Statistical Methods in Diagnostic Medicine*, 2nd ed.
 
-> Walter (1988). *Biometrics*, 44(3), 601–607.
+> Walter (1988). *Biometrics*, 44(3), 601–607.  
+> Zhou (2005). *Biometrics*, 61(2), 456–463.  
+> Hsieh, Su & Zhou (2011). *Biometrics*, 67(4), 1197–1206.
 
-Currently implemented: **binary** methods (pass/fail).  The `ordinal` and `continuous` method families are planned.
+Supports all three measurement paradigms from the original R package:
+
+| Type | Data | Key statistics |
+|---|---|---|
+| **binary** | pass/fail (0/1) | sensitivity, specificity, prevalence |
+| **ordinal** | Likert-scale integers | CMF, AUC (Wilcoxon), prevalence |
+| **continuous** | real-valued | group means/covariances, AUC (normal), prevalence |
 
 ---
 
@@ -73,20 +81,47 @@ Simulates paired multi-method measurements from a population with known prevalen
 ### Estimation
 
 ```python
-result = estimate_ML("binary", data=data)
-result = estimate_ML_binary(data, freqs=None, init=None, max_iter=1000, tol=1e-7)
+result = estimate_ML("binary",     data=data)
+result = estimate_ML("ordinal",    data=data)
+result = estimate_ML("continuous", data=data)
 ```
 
 Runs the EM algorithm and returns a `MultiMethodMLEstimate` object.
 
-| `result` attribute | Description |
+**Common attributes**
+
+| Attribute | Description |
 |---|---|
-| `result.results["prev_est"]` | Estimated prevalence (float) |
-| `result.results["se_est"]` | Estimated sensitivity per method (ndarray) |
-| `result.results["sp_est"]` | Estimated specificity per method (ndarray) |
-| `result.results["qk_est"]` | Posterior P(positive) per observation (ndarray) |
+| `result.results["prev_est"]` | Estimated prevalence |
 | `result.iter` | Iterations until convergence |
 | `result.prog` | Per-iteration history (when `save_progress=True`) |
+
+**Binary-specific** (`result.results`)
+
+| Key | Description |
+|---|---|
+| `se_est` | Sensitivity per method |
+| `sp_est` | Specificity per method |
+| `qk_est` | Posterior P(D=1) per observation |
+
+**Ordinal-specific** (`result.results`)
+
+| Key | Description |
+|---|---|
+| `A_i_est` | AUC per method (Wilcoxon) |
+| `phi_1ij_est` | PMF for positive state (n_level × n_method) |
+| `phi_0ij_est` | PMF for negative state (n_level × n_method) |
+| `q_k1_est` | Posterior P(D=1) per observation |
+
+**Continuous-specific** (`result.results`)
+
+| Key | Description |
+|---|---|
+| `mu_i1_est` / `mu_i0_est` | Group mean vectors |
+| `sigma_i1_est` / `sigma_i0_est` | Group covariance matrices |
+| `eta_j_est` | Standardised mean difference per method |
+| `A_j_est` | AUC = Φ(η_j) per method |
+| `z_k1_est` | Posterior P(D=1) per observation |
 
 ### Initialisation
 
@@ -130,18 +165,11 @@ q10, q50, q90 = np.quantile(agg["se_est"]["values"], [0.10, 0.50, 0.90], axis=0)
 
 ### Plots
 
-`plot_ML` (or `plot_ML_binary`) returns a dict of `matplotlib.figure.Figure` objects:
+`plot_ML(result, params=sim["params"])` returns a dict of `matplotlib.figure.Figure` objects.  Pass `params` to overlay true values on simulation data.
 
-| Key | Description |
-|---|---|
-| `"prev"` | Prevalence estimate over EM iterations |
-| `"se"` | Sensitivity estimates over EM iterations |
-| `"sp"` | Specificity estimates over EM iterations |
-| `"qk"` | Posterior probabilities over EM iterations |
-| `"qk_hist"` | Histogram of final posterior probabilities |
-| `"se_sp"` | Path through sensitivity/specificity space |
-
-Pass `params=sim["params"]` to overlay true values (useful when evaluating on simulated data).
+**Binary** — keys: `prev`, `se`, `sp`, `qk`, `qk_hist`, `se_sp`  
+**Ordinal** — keys: `ROC`, `q_k1`, `q_k0`, `q_k1_hist`, `phi_d`  
+**Continuous** — keys: `ROC`, `z_k1`, `z_k0`, `z_k1_hist`
 
 ### AUC
 
@@ -162,6 +190,8 @@ emery/
 ├── classes.py          # MultiMethodMLEstimate, BootML
 ├── utils.py            # name_thing, define_disease_state, unique_obs_summary, …
 ├── binary.py           # Binary EM functions and plotting
+├── ordinal.py          # Ordinal EM functions and plotting
+├── continuous.py       # Continuous EM functions and plotting
 └── core.py             # Dispatch functions (estimate_ML, boot_ML, …)
 ```
 
