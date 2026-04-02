@@ -10,7 +10,9 @@ confidence intervals for any supported data type.
 """
 from __future__ import annotations
 
+import os
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import numpy as np
@@ -318,6 +320,31 @@ def plot_ML(
 
 
 # ---------------------------------------------------------------------------
+# Bootstrap worker (module-level so it is picklable for multiprocessing)
+# ---------------------------------------------------------------------------
+
+
+def _boot_replicate(args: tuple):
+    """Run a single bootstrap replicate.  Called by ``boot_ML``."""
+    type_, data, boot_freqs, method_names, n_method, randomize_init, \
+        max_iter, tol, rand_seed, extra_kwargs = args
+
+    if randomize_init:
+        if rand_seed is not None:
+            np.random.seed(rand_seed)
+        init_vals = random_start(type=type_, n_method=n_method,
+                                 method_names=method_names)
+    else:
+        init_vals = pollinate_ML(type=type_, data=data, freqs=boot_freqs)
+
+    rep = estimate_ML(
+        type=type_, data=data, freqs=boot_freqs, init=init_vals,
+        max_iter=max_iter, tol=tol, save_progress=False, **extra_kwargs,
+    )
+    return rep.get_results()
+
+
+# ---------------------------------------------------------------------------
 # Bootstrap
 # ---------------------------------------------------------------------------
 
@@ -333,6 +360,7 @@ def boot_ML(
     tol: float = 1e-7,
     seed: Optional[int] = None,
     verbose: bool = False,
+    n_jobs: int = 1,
     **kwargs,
 ) -> BootML:
     """
@@ -365,6 +393,11 @@ def boot_ML(
         Convergence tolerance per replicate.
     seed : int or None
         Global random seed.
+    verbose : bool
+        Print progress at each 10 % increment.
+    n_jobs : int
+        Number of parallel worker processes.  ``1`` (default) runs
+        sequentially; ``-1`` uses all available CPU cores.
     **kwargs
         Additional arguments forwarded to ``estimate_ML``.
 
@@ -404,37 +437,54 @@ def boot_ML(
     method_names = v_0.names.get("method_names")
     prob = freqs / np.sum(freqs)
 
-    v_star: list[dict] = []
+    # Pre-generate all bootstrap samples and per-replicate seeds in the main
+    # process so results are reproducible regardless of n_jobs.
+    all_boot_freqs = [
+        np.bincount(
+            np.random.choice(n_obs, size=n_study, replace=True, p=prob),
+            minlength=n_obs,
+        ).astype(float)
+        for _ in range(n_boot)
+    ]
+    rand_seeds = (
+        np.random.randint(0, 2**31, size=n_boot).tolist()
+        if randomize_init else [None] * n_boot
+    )
+
+    arg_list = [
+        (t, data, all_boot_freqs[i], method_names, n_method,
+         randomize_init, max_iter, tol, rand_seeds[i], kwargs)
+        for i in range(n_boot)
+    ]
+
+    workers = os.cpu_count() if n_jobs == -1 else n_jobs
+    v_star: list[dict] = [None] * n_boot  # type: ignore[list-item]
     _last_pct_printed = -1
-    for i in range(n_boot):
-        # Resample observation indices (weighted)
-        sampled_idx = np.random.choice(n_obs, size=n_study, replace=True, p=prob)
-        boot_freqs = np.bincount(sampled_idx, minlength=n_obs).astype(float)
 
-        if verbose:
-            pct = (i + 1) * 100 // n_boot
-            if pct // 10 > _last_pct_printed // 10:
-                print(f"\rBootstrap: {i + 1}/{n_boot} [{pct}%]", end="", flush=True)
-                _last_pct_printed = pct
-
-        if randomize_init:
-            init_vals = random_start(
-                type=t, n_method=n_method, method_names=method_names
-            )
-        else:
-            init_vals = pollinate_ML(type=t, data=data, freqs=boot_freqs)
-
-        rep = estimate_ML(
-            type=t,
-            data=data,
-            freqs=boot_freqs,
-            init=init_vals,
-            max_iter=max_iter,
-            tol=tol,
-            save_progress=False,
-            **kwargs,
-        )
-        v_star.append(rep.get_results())
+    if workers == 1:
+        for i, args in enumerate(arg_list):
+            v_star[i] = _boot_replicate(args)
+            if verbose:
+                pct = (i + 1) * 100 // n_boot
+                if pct // 10 > _last_pct_printed // 10:
+                    print(f"\rBootstrap: {i + 1}/{n_boot} [{pct}%]",
+                          end="", flush=True)
+                    _last_pct_printed = pct
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(_boot_replicate, a): i
+                       for i, a in enumerate(arg_list)}
+            completed = 0
+            for future in as_completed(futures):
+                idx = futures[future]
+                v_star[idx] = future.result()
+                completed += 1
+                if verbose:
+                    pct = completed * 100 // n_boot
+                    if pct // 10 > _last_pct_printed // 10:
+                        print(f"\rBootstrap: {completed}/{n_boot} [{pct}%]",
+                              end="", flush=True)
+                        _last_pct_printed = pct
 
     if verbose:
         print()  # move past the \r line
