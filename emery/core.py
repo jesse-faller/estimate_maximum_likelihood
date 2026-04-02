@@ -332,6 +332,7 @@ def boot_ML(
     max_iter: int = 1000,
     tol: float = 1e-7,
     seed: Optional[int] = None,
+    verbose: bool = False,
     **kwargs,
 ) -> BootML:
     """
@@ -404,10 +405,17 @@ def boot_ML(
     prob = freqs / np.sum(freqs)
 
     v_star: list[dict] = []
-    for _ in range(n_boot):
+    _last_pct_printed = -1
+    for i in range(n_boot):
         # Resample observation indices (weighted)
         sampled_idx = np.random.choice(n_obs, size=n_study, replace=True, p=prob)
         boot_freqs = np.bincount(sampled_idx, minlength=n_obs).astype(float)
+
+        if verbose:
+            pct = (i + 1) * 100 // n_boot
+            if pct // 10 > _last_pct_printed // 10:
+                print(f"\rBootstrap: {i + 1}/{n_boot} [{pct}%]", end="", flush=True)
+                _last_pct_printed = pct
 
         if randomize_init:
             init_vals = random_start(
@@ -427,6 +435,9 @@ def boot_ML(
             **kwargs,
         )
         v_star.append(rep.get_results())
+
+    if verbose:
+        print()  # move past the \r line
 
     params = {
         "type": t,
